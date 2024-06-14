@@ -19,7 +19,7 @@ This repository contains a Python script for extracting names and company inform
 1. **Clone the repository:**
 
     ```sh
-    git clone https://github.com/cdrguru/ocr-data-extraction.git
+    git clone https://github.com/cdrguru/ocdrnet.git
     cd ocr-data-extraction
     ```
 
