@@ -16,7 +16,7 @@ load_dotenv()
 NVIDIA_KEY = os.getenv("NGC_PERSONAL_API_KEY")
 
 if not NVIDIA_KEY:
-    print("Error: NVIDIA API Key not found. Please check your .env file.")
+    logging.error("Error: NVIDIA API Key not found. Please check your .env file.")
     sys.exit(1)
 
 # NVAI endpoint for the ocdrnet NIM
@@ -95,7 +95,7 @@ def parse_extracted_text(text):
             name_parts = line.split()
             if len(name_parts) == 2:
                 current_entry['first_name'] = name_parts[0]
-                current_entry['last_name'] = name_parts[1]
+                current_entry['last_name'] = name parts[1]
             else:
                 current_entry['first_name'] = name_parts[0]
                 current_entry['last_name'] = ' '.join(name_parts[1:])
@@ -116,7 +116,9 @@ def extract_and_parse_zip(zip_filename, output_folder):
             extracted_file_path = os.path.join(output_folder, extracted_file)
             if os.path.isfile(extracted_file_path) and extracted_file_path.endswith('.txt'):
                 with open(extracted_file_path, "r", encoding='utf-8', errors='ignore') as file:
-                    extracted_text += file.read()
+                    file_content = file.read()
+                    logging.info(f"Extracted file content from {extracted_file_path}: {file_content[:100]}...")
+                    extracted_text += file_content
     return extracted_text
 
 def main(image_folder, output_folder):
@@ -161,11 +163,15 @@ def main(image_folder, output_folder):
             with open(zip_filename, "wb") as zip_file:
                 zip_file.write(response.content)
 
+            logging.info(f"Saved response to {zip_filename}")
+
             # Extract and parse the zip file
             extracted_text = extract_and_parse_zip(zip_filename, output_folder)
+            logging.info(f"Extracted text from {zip_filename}: {extracted_text[:500]}...")
 
             # Parse the extracted text
             parsed_data = parse_extracted_text(extracted_text)
+            logging.info(f"Parsed data: {parsed_data}")
 
             # Save to output CSV
             csv_filename = os.path.join(output_folder, f"{image_name}.csv")
@@ -174,6 +180,8 @@ def main(image_folder, output_folder):
                 writer.writeheader()
                 for result in parsed_data:
                     writer.writerow(result)
+
+            logging.info(f"Saved CSV to {csv_filename}")
 
             # Clean up the zip file and extracted files
             os.remove(zip_filename)
