@@ -3,6 +3,7 @@ import sys
 import uuid
 import zipfile
 import requests
+import csv
 import json
 import logging
 import re
@@ -83,12 +84,12 @@ def parse_extracted_text(text):
 
     for line in lines:
         line = clean_text(line)
+        logging.info(f"Cleaned line: {line}")
         if not line:
             continue
 
         classification = classify_text(line)
-        logging.info(f"Line: {line} | Classification: {classification}")
-        
+        logging.info(f"Classified line: {line} as {classification}")
         if classification == 'name':
             if 'first_name' in current_entry and 'last_name' in current_entry:
                 extracted_data.append(current_entry)
@@ -123,13 +124,14 @@ def extract_and_parse_zip(zip_filename, output_folder):
     return extracted_text
 
 def main(image_folder):
+    output_folder = "/Users/pmd/myghprod/ocdrnet/output"
     """Uploads images to the NVCF API, processes them with the OCR model,
-    and saves the extracted data to JSON files in the output folder.
+    and saves the extracted data to CSV files in the output folder.
     """
-    output_folder = "/Users/pmd/myghprod/ocdrnet/output_folder"
-
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
+
+    csv_files = []
 
     for image_name in os.listdir(image_folder):
         image_path = os.path.join(image_folder, image_name)
@@ -161,8 +163,6 @@ def main(image_folder):
             response = requests.post(nvai_url, headers=headers, json=inputs, timeout=30)
             response.raise_for_status()
 
-            logging.info(f"API Response: {response.content[:500]}...")
-
             # Save the response content as a zip file
             zip_filename = os.path.join(output_folder, f"{image_name}_output.zip")
             with open(zip_filename, "wb") as zip_file:
@@ -178,23 +178,39 @@ def main(image_folder):
             parsed_data = parse_extracted_text(extracted_text)
             logging.info(f"Parsed data: {parsed_data}")
 
-            # Save to output JSON
-            json_filename = os.path.join(output_folder, f"{image_name}.json")
-            with open(json_filename, "w", encoding='utf-8') as out_json:
-                json.dump(parsed_data, out_json, ensure_ascii=False, indent=4)
+            # Save to output CSV
+            csv_filename = os.path.join(output_folder, f"{image_name}.csv")
+            with open(csv_filename, "w", newline='', encoding='utf-8') as out_csv:
+                writer = csv.DictWriter(out_csv, fieldnames=['first_name', 'last_name', 'company'])
+                writer.writeheader()
+                for result in parsed_data:
+                    writer.writerow(result)
 
-            logging.info(f"Saved JSON to {json_filename}")
+            logging.info(f"Saved CSV to {csv_filename}")
+            csv_files.append(csv_filename)
 
-            # Clean up the zip file and the specific extracted files
+            # Clean up the zip file and extracted files
             os.remove(zip_filename)
-            extracted_files = [f for f in os.listdir(output_folder) if f.startswith(image_name) and f.endswith('.txt')]
-            for extracted_file in extracted_files:
-                os.remove(os.path.join(output_folder, extracted_file))
+            for extracted_file in os.listdir(output_folder):
+                extracted_file_path = os.path.join(output_folder, extracted_file)
+                if os.path.isfile(extracted_file_path):
+                    os.remove(extracted_file_path)
+                elif os.path.isdir(extracted_file_path):
+                    os.rmdir(extracted_file_path)
 
         except requests.exceptions.HTTPError as http_err:
             logging.error(f"HTTP error occurred: {http_err}")
         except requests.exceptions.RequestException as req_err:
             logging.error(f"Request error occurred: {req_err}")
+
+    # Create a zip file for all CSV files
+    output_zip_filename = os.path.join(output_folder, "output_csv_files.zip")
+    with zipfile.ZipFile(output_zip_filename, 'w') as output_zip:
+        for csv_file in csv_files:
+            output_zip.write(csv_file, os.path.basename(csv_file))
+            os.remove(csv_file)
+
+    logging.info(f"All CSV files have been zipped into {output_zip_filename}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
